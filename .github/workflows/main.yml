@@ -21,13 +21,14 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Instalar Android SDK
+      - name: Preparar Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Aceptar licencias Android
+        run: yes | sdkmanager --licenses || true
+
       - name: Compilar APK
-        run: |
-          chmod +x gradlew
-          ./gradlew assembleDebug
+        run: gradle assembleDebug
 
       - name: Guardar APK
         uses: actions/upload-artifact@v4
