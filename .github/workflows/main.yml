@@ -24,13 +24,10 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Configurar Android SDK
+      - name: Instalar SDK Android
         uses: android-actions/setup-android@v3
-
-      - name: Instalar SDK requerido
-        shell: bash
-        run: |
-          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+        with:
+          packages: "platforms;android-35 build-tools;35.0.0"
 
       - name: Aceptar licencias Android
         shell: bash
