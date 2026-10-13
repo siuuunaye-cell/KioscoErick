@@ -15,8 +15,327 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Descargar proyecto
+      - name: Descargar repositorio
         uses: actions/checkout@v4
+
+      - name: Armar el proyecto Android completo
+        shell: bash
+        run: |
+          cat > "settings.gradle.kts" <<'FIN_ARCHIVO'
+          pluginManagement {
+              repositories { google(); mavenCentral(); gradlePluginPortal() }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories { google(); mavenCentral() }
+          }
+          rootProject.name = "KioscoErick"
+          include(":app")
+          FIN_ARCHIVO
+          cat > "build.gradle.kts" <<'FIN_ARCHIVO'
+          plugins {
+              id("com.android.application") version "8.7.3" apply false
+              id("org.jetbrains.kotlin.android") version "2.0.21" apply false
+              id("org.jetbrains.kotlin.plugin.compose") version "2.0.21" apply false
+          }
+          FIN_ARCHIVO
+          cat > "gradle.properties" <<'FIN_ARCHIVO'
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          android.useAndroidX=true
+          kotlin.code.style=official
+          FIN_ARCHIVO
+          mkdir -p "app"
+          cat > "app/build.gradle.kts" <<'FIN_ARCHIVO'
+          plugins {
+              id("com.android.application")
+              id("org.jetbrains.kotlin.android")
+              id("org.jetbrains.kotlin.plugin.compose")
+          }
+          android {
+              namespace = "com.kioscoerick.app"
+              compileSdk = 35
+              defaultConfig {
+                  applicationId = "com.kioscoerick.app"
+                  minSdk = 23
+                  targetSdk = 35
+                  versionCode = 1
+                  versionName = "1.0"
+              }
+              buildFeatures { compose = true }
+              compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }
+              kotlinOptions { jvmTarget = "17" }
+          }
+          dependencies {
+              implementation(platform("androidx.compose:compose-bom:2024.12.01"))
+              implementation("androidx.activity:activity-compose:1.10.0")
+              implementation("androidx.compose.ui:ui")
+              implementation("androidx.compose.ui:ui-tooling-preview")
+              implementation("androidx.compose.material3:material3")
+              implementation("androidx.compose.material:material-icons-extended")
+              implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
+              implementation("com.journeyapps:zxing-android-embedded:4.3.0")
+              implementation("com.google.zxing:core:3.5.3")
+          }
+          FIN_ARCHIVO
+          mkdir -p "app/src/main"
+          cat > "app/src/main/AndroidManifest.xml" <<'FIN_ARCHIVO'
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-feature android:name="android.hardware.camera" android:required="true" />
+              <uses-permission android:name="android.permission.CAMERA" />
+              <application
+                  android:allowBackup="true"
+                  android:label="Kiosco Erick"
+                  android:theme="@style/Theme.KioscoErick"
+                  android:supportsRtl="true">
+                  <activity android:name="com.journeyapps.barcodescanner.CaptureActivity"
+                      android:screenOrientation="portrait"
+                      android:stateNotNeeded="true"
+                      android:theme="@style/Theme.KioscoErick"
+                      android:windowSoftInputMode="stateAlwaysHidden" />
+                  <activity android:name=".MainActivity" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          FIN_ARCHIVO
+          mkdir -p "app/src/main/res/values"
+          cat > "app/src/main/res/values/styles.xml" <<'FIN_ARCHIVO'
+          <resources>
+              <style name="Theme.KioscoErick" parent="android:style/Theme.Material.Light.NoActionBar">
+                  <item name="android:fontFamily">sans</item>
+                  <item name="android:colorAccent">#16803C</item>
+                  <item name="android:statusBarColor">#102A1B</item>
+                  <item name="android:navigationBarColor">#102A1B</item>
+                  <item name="android:windowLightStatusBar">false</item>
+              </style>
+          </resources>
+          FIN_ARCHIVO
+          mkdir -p "app/src/main/java/com/kioscoerick/app"
+          cat > "app/src/main/java/com/kioscoerick/app/MainActivity.kt" <<'FIN_ARCHIVO'
+          package com.kioscoerick.app
+
+          import android.content.Context
+          import android.media.AudioManager
+          import android.media.ToneGenerator
+          import android.os.Bundle
+          import androidx.activity.ComponentActivity
+          import androidx.activity.compose.setContent
+          import androidx.activity.compose.rememberLauncherForActivityResult
+          import androidx.compose.foundation.layout.*
+          import androidx.compose.foundation.lazy.LazyColumn
+          import androidx.compose.foundation.lazy.items
+          import androidx.compose.foundation.text.KeyboardOptions
+          import androidx.compose.material.icons.Icons
+          import androidx.compose.material.icons.filled.Add
+          import androidx.compose.material.icons.filled.Delete
+          import androidx.compose.material.icons.filled.PointOfSale
+          import androidx.compose.material.icons.filled.Inventory2
+          import androidx.compose.material.icons.filled.QrCodeScanner
+          import androidx.compose.material3.*
+          import androidx.compose.runtime.*
+          import androidx.compose.ui.Alignment
+          import androidx.compose.ui.Modifier
+          import androidx.compose.ui.text.font.FontWeight
+          import androidx.compose.ui.text.input.KeyboardType
+          import androidx.compose.ui.unit.dp
+          import com.journeyapps.barcodescanner.ScanContract
+          import com.journeyapps.barcodescanner.ScanOptions
+          import org.json.JSONArray
+          import org.json.JSONObject
+          import java.text.SimpleDateFormat
+          import java.util.Date
+          import java.util.Locale
+
+          data class Product(val barcode:String, val name:String, val price:Double, val stock:Int)
+          data class CartLine(val barcode:String, val name:String, val price:Double, val qty:Int)
+
+          class MainActivity : ComponentActivity() {
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  setContent { KioscoApp(this) }
+              }
+          }
+
+          @OptIn(ExperimentalMaterial3Api::class)
+          @Composable
+          fun KioscoApp(ctx: Context) {
+              val prefs = remember { ctx.getSharedPreferences("kiosco_erick_data", Context.MODE_PRIVATE) }
+              var products by remember { mutableStateOf(loadProducts(prefs)) }
+              var sales by remember { mutableStateOf(prefs.getInt("sales_count", 0)) }
+              var tab by remember { mutableStateOf(0) }
+              var cart by remember { mutableStateOf(listOf<CartLine>()) }
+              var notice by remember { mutableStateOf("") }
+              var scannedCode by remember { mutableStateOf("") }
+              var name by remember { mutableStateOf("") }
+              var price by remember { mutableStateOf("") }
+              var stock by remember { mutableStateOf("1") }
+              var showRegister by remember { mutableStateOf(false) }
+
+              fun saveAll(updated: List<Product>) {
+                  products = updated
+                  val arr = JSONArray()
+                  updated.forEach { p ->
+                      arr.put(JSONObject().put("barcode",p.barcode).put("name",p.name)
+                          .put("price",p.price).put("stock",p.stock))
+                  }
+                  prefs.edit().putString("products", arr.toString()).apply()
+              }
+              fun addScanned(code: String) {
+                  val p = products.firstOrNull { it.barcode == code }
+                  if (p == null) {
+                      scannedCode = code
+                      name = ""
+                      price = ""
+                      stock = "1"
+                      showRegister = true
+                      notice = "Producto nuevo: completá sus datos y guardalo."
+                  } else {
+                      cart = if (cart.any { it.barcode == code }) cart.map {
+                          if (it.barcode == code) it.copy(qty=it.qty+1) else it
+                      } else cart + CartLine(p.barcode,p.name,p.price,1)
+                      try { ToneGenerator(AudioManager.STREAM_MUSIC, 90).startTone(ToneGenerator.TONE_PROP_BEEP, 150) } catch (_:Exception) {}
+                      notice = "Bip: ${p.name} agregado"
+                  }
+              }
+              val scanLauncher = rememberLauncherForActivityResult(ScanContract()) { result ->
+                  if (result.contents != null) addScanned(result.contents)
+              }
+
+              MaterialTheme(colorScheme = lightColorScheme(primary = androidx.compose.ui.graphics.Color(0xFF16803C))) {
+                  Scaffold(topBar = {
+                      TopAppBar(title = {
+                          Column {
+                              Text("Kiosco Erick", fontWeight = FontWeight.Bold)
+                              Text("Caja móvil · productos, ventas y stock", style = MaterialTheme.typography.labelSmall)
+                          }
+                      })
+                  }) { padding ->
+                      Column(Modifier.padding(padding).fillMaxSize().padding(16.dp)) {
+                          Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                              FilterChip(selected=tab==0,onClick={tab=0},label={Text("Vender")},leadingIcon={Icon(Icons.Default.PointOfSale,null)})
+                              FilterChip(selected=tab==1,onClick={tab=1},label={Text("Productos (${products.size})")},leadingIcon={Icon(Icons.Default.Inventory2,null)})
+                              FilterChip(selected=tab==2,onClick={tab=2},label={Text("Resumen")})
+                          }
+                          Spacer(Modifier.height(12.dp))
+                          when(tab) {
+                              0 -> {
+                                  Button(onClick={
+                                      val opts=ScanOptions().setPrompt("Apuntá al código de barras del producto")
+                                          .setBeepEnabled(true).setOrientationLocked(true).setDesiredBarcodeFormats(ScanOptions.ONE_D_CODE_TYPES)
+                                      scanLauncher.launch(opts)
+                                  }, modifier=Modifier.fillMaxWidth().height(58.dp)) {
+                                      Icon(Icons.Default.QrCodeScanner,null); Spacer(Modifier.width(8.dp)); Text("ESCANEAR PRODUCTO")
+                                  }
+                                  if (notice.isNotBlank()) Text(notice, modifier=Modifier.padding(vertical=8.dp), color=MaterialTheme.colorScheme.primary)
+                                  Text("Carrito", style=MaterialTheme.typography.titleLarge, fontWeight=FontWeight.Bold)
+                                  if (cart.isEmpty()) Text("Todavía no hay productos. Escaneá uno para empezar.", modifier=Modifier.padding(vertical=12.dp))
+                                  LazyColumn(Modifier.weight(1f, fill=false)) {
+                                      items(cart, key={it.barcode}) { line ->
+                                          Card(Modifier.fillMaxWidth().padding(vertical=4.dp)) {
+                                              Row(Modifier.padding(12.dp), verticalAlignment=Alignment.CenterVertically) {
+                                                  Column(Modifier.weight(1f)) {
+                                                      Text(line.name, fontWeight=FontWeight.SemiBold)
+                                                      Text("${line.qty} × ${money(line.price)} = ${money(line.qty*line.price)}")
+                                                  }
+                                                  IconButton(onClick={cart=cart.filterNot{it.barcode==line.barcode}}) {
+                                                      Icon(Icons.Default.Delete,"Quitar")
+                                                  }
+                                              }
+                                          }
+                                      }
+                                  }
+                                  val total = cart.sumOf { it.price * it.qty }
+                                  Text("TOTAL: ${money(total)}", style=MaterialTheme.typography.headlineSmall, fontWeight=FontWeight.Bold)
+                                  Button(enabled=cart.isNotEmpty(), onClick={
+                                      val newProducts=products.map { p ->
+                                          val sold=cart.firstOrNull{it.barcode==p.barcode}?.qty ?: 0
+                                          p.copy(stock=(p.stock-sold).coerceAtLeast(0))
+                                      }
+                                      saveAll(newProducts)
+                                      sales += 1
+                                      prefs.edit().putInt("sales_count",sales).putString("last_sale", "${SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("es","AR")).format(Date())} · ${money(total)}").apply()
+                                      cart= emptyList()
+                                      notice="¡Venta registrada! Total ${money(total)}"
+                                  }, modifier=Modifier.fillMaxWidth()) { Text("COBRAR Y REGISTRAR VENTA") }
+                              }
+                              1 -> {
+                                  Button(onClick={
+                                      val opts=ScanOptions().setPrompt("Escaneá el código para registrar el producto")
+                                          .setBeepEnabled(true).setOrientationLocked(true).setDesiredBarcodeFormats(ScanOptions.ONE_D_CODE_TYPES)
+                                      scanLauncher.launch(opts)
+                                  }, modifier=Modifier.fillMaxWidth()) { Icon(Icons.Default.Add,null); Text(" ESCANEAR Y REGISTRAR PRODUCTO") }
+                                  Text("Los productos quedan guardados en este celular.", style=MaterialTheme.typography.bodySmall, modifier=Modifier.padding(vertical=8.dp))
+                                  LazyColumn {
+                                      items(products, key={it.barcode}) { p ->
+                                          Card(Modifier.fillMaxWidth().padding(vertical=4.dp)) {
+                                              Row(Modifier.padding(12.dp), verticalAlignment=Alignment.CenterVertically) {
+                                                  Column(Modifier.weight(1f)) {
+                                                      Text(p.name, fontWeight=FontWeight.Bold)
+                                                      Text("Código: ${p.barcode}")
+                                                      Text("${money(p.price)} · Stock: ${p.stock}")
+                                                  }
+                                                  IconButton(onClick={saveAll(products.filterNot{it.barcode==p.barcode})}) { Icon(Icons.Default.Delete,"Eliminar") }
+                                              }
+                                          }
+                                      }
+                                  }
+                              }
+                              else -> {
+                                  Text("Resumen", style=MaterialTheme.typography.headlineSmall, fontWeight=FontWeight.Bold)
+                                  Text("Ventas registradas: $sales", modifier=Modifier.padding(top=12.dp))
+                                  Text("Productos cargados: ${products.size}")
+                                  Text("Última venta: ${prefs.getString("last_sale","Todavía no hay ventas")}")
+                                  Text("Los datos se guardan localmente en este teléfono. Hacé una copia de seguridad si son importantes.", modifier=Modifier.padding(top=16.dp))
+                              }
+                          }
+                      }
+                  }
+              }
+
+              if (showRegister) {
+                  AlertDialog(onDismissRequest={showRegister=false}, title={Text("Registrar producto")},
+                      text={
+                          Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
+                              Text("Código detectado: $scannedCode")
+                              OutlinedTextField(value=name,onValueChange={name=it},label={Text("Nombre del producto")},singleLine=true)
+                              OutlinedTextField(value=price,onValueChange={price=it},label={Text("Precio en pesos")},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Decimal),singleLine=true)
+                              OutlinedTextField(value=stock,onValueChange={stock=it},label={Text("Stock inicial")},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Number),singleLine=true)
+                          }
+                      },
+                      confirmButton={ TextButton(onClick={
+                          val parsedPrice=price.replace(",",".").toDoubleOrNull()
+                          val parsedStock=stock.toIntOrNull()
+                          if (name.isNotBlank() && parsedPrice!=null && parsedPrice>=0 && parsedStock!=null && parsedStock>=0) {
+                              val p=Product(scannedCode,name.trim(),parsedPrice,parsedStock)
+                              saveAll(products.filterNot{it.barcode==scannedCode}+p)
+                              cart=cart.filterNot{it.barcode==scannedCode}+CartLine(p.barcode,p.name,p.price,1)
+                              showRegister=false
+                              notice="Producto guardado y agregado a la venta."
+                              try { ToneGenerator(AudioManager.STREAM_MUSIC,90).startTone(ToneGenerator.TONE_PROP_BEEP,150) } catch (_:Exception) {}
+                          } else notice="Revisá nombre, precio y stock."
+                      }) { Text("Guardar") } },
+                      dismissButton={TextButton(onClick={showRegister=false}){Text("Cancelar")}}
+                  )
+              }
+          }
+
+          fun loadProducts(prefs: android.content.SharedPreferences): List<Product> {
+              return try {
+                  val arr=JSONArray(prefs.getString("products","[]"))
+                  (0 until arr.length()).map { i ->
+                      val o=arr.getJSONObject(i)
+                      Product(o.getString("barcode"),o.getString("name"),o.getDouble("price"),o.optInt("stock",0))
+                  }
+              } catch (_:Exception) { emptyList() }
+          }
+          fun money(value: Double): String = "$ " + String.format(Locale("es","AR"), "%,.2f", value)
+          FIN_ARCHIVO
 
       - name: Configurar Java
         uses: actions/setup-java@v4
@@ -33,18 +352,4 @@ jobs:
         shell: bash
         run: |
           set +e
-          set +o pipefail
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
-          exit 0
-
-      - name: Compilar APK
-        run: gradle assembleDebug --stacktrace
-
-      - name: Guardar APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: Kiosco-Erick-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
-          retention-days: 7
-          
+          set +o pipef
