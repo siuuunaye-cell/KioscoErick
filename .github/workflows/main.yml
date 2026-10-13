@@ -3,7 +3,8 @@ name: Compilar APK Kiosco Erick
 on:
 workflow_dispatch:
 push:
-branches: [main]
+branches:
+- main
 
 permissions:
 contents: read
@@ -12,10 +13,6 @@ jobs:
 build:
 name: Compilar aplicación Android
 runs-on: ubuntu-latest
-
-env:
-  ANDROID_HOME: /usr/local/lib/android/sdk
-  ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
 steps:
   - name: Descargar proyecto
@@ -27,23 +24,18 @@ steps:
       distribution: temurin
       java-version: '17'
 
+  - name: Preparar Android SDK
+    uses: android-actions/setup-android@v4
+
+  - name: Instalar componentes Android
+    run: |
+      yes | sdkmanager --licenses || true
+      sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+
   - name: Preparar Gradle
     uses: gradle/actions/setup-gradle@v4
     with:
       gradle-version: '8.9'
-
-  - name: Aceptar licencias Android
-    shell: bash
-    run: |
-      yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses || true
-
-  - name: Instalar componentes Android
-    shell: bash
-    run: |
-      "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install \
-        "platform-tools" \
-        "platforms;android-35" \
-        "build-tools;35.0.0"
 
   - name: Compilar APK
     run: gradle assembleDebug --stacktrace
