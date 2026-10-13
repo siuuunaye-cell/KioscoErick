@@ -11,7 +11,6 @@ permissions:
 
 jobs:
   build:
-    name: Compilar aplicación Android
     runs-on: ubuntu-latest
 
     steps:
@@ -24,29 +23,22 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Configurar Android SDK
+      - name: Instalar Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: |
+            platforms;android-35
+            build-tools;35.0.0
 
       - name: Aceptar licencias Android
-        shell: bash
-        run: |
-          SDKMANAGER="${ANDROID_HOME:-$ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager"
-          yes | "$SDKMANAGER" --licenses
-
-      - name: Instalar SDK requerido
-        shell: bash
-        run: |
-          SDKMANAGER="${ANDROID_HOME:-$ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager"
-          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0"
+        run: yes | sdkmanager --licenses
 
       - name: Crear Gradle Wrapper
-        shell: bash
         run: |
           gradle wrapper --gradle-version 8.9
           chmod +x ./gradlew
 
       - name: Compilar APK
-        shell: bash
         run: ./gradlew assembleDebug
 
       - name: Subir APK
