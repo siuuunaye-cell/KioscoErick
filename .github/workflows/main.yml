@@ -14,6 +14,9 @@ jobs:
     name: Compilar aplicación Android
     runs-on: ubuntu-latest
 
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+
     steps:
       - name: Descargar proyecto
         uses: actions/checkout@v4
@@ -24,23 +27,29 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Configurar Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: '16.0'
+
+      - name: Aceptar licencias Android
+        shell: bash
+        run: |
+          mkdir -p "$ANDROID_HOME/licenses"
+          sdkmanager --licenses </dev/null || true
+
+      - name: Instalar componentes Android
+        shell: bash
+        run: |
+          sdkmanager --install \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
+
       - name: Configurar Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-
-      - name: Preparar Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Aceptar licencias de Android
-        shell: bash
-        run: |
-          set +o pipefail
-          yes | sdkmanager --licenses
-
-      - name: Instalar componentes de Android
-        run: |
-          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
 
       - name: Compilar APK
         run: gradle assembleDebug --stacktrace
