@@ -350,6 +350,4 @@ jobs:
 
       - name: Aceptar licencias Android
         shell: bash
-        run: |
-          set +e
-          set +o pipef
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest
