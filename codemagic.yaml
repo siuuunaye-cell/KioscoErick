@@ -11,9 +11,6 @@ script: |
 if [ -f "./gradlew" ]; then
 chmod +x ./gradlew
 ./gradlew assembleDebug
-elif [ -f "./gradlew.bat" ]; then
-echo "Se necesita el wrapper de Gradle para Linux."
-exit 1
 else
 echo "No se encontró gradlew en la raíz del proyecto."
 exit 1
