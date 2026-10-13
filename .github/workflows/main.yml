@@ -24,13 +24,22 @@ steps:
       distribution: temurin
       java-version: '17'
 
-  - name: Preparar Android SDK
-    uses: android-actions/setup-android@v4
-
-  - name: Instalar componentes Android
+  - name: Configurar Android SDK existente
+    shell: bash
     run: |
-      yes | sdkmanager --licenses || true
-      sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+      echo "ANDROID_HOME=/usr/local/lib/android/sdk" >> "$GITHUB_ENV"
+      echo "ANDROID_SDK_ROOT=/usr/local/lib/android/sdk" >> "$GITHUB_ENV"
+      echo "/usr/local/lib/android/sdk/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+      echo "/usr/local/lib/android/sdk/platform-tools" >> "$GITHUB_PATH"
+
+  - name: Aceptar licencias e instalar SDK
+    shell: bash
+    run: |
+      yes | /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager --licenses || true
+      /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager \
+        "platform-tools" \
+        "platforms;android-35" \
+        "build-tools;35.0.0"
 
   - name: Preparar Gradle
     uses: gradle/actions/setup-gradle@v4
