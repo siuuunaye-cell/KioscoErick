@@ -1,63 +1,57 @@
 name: Compilar APK Kiosco Erick
 
 on:
-  workflow_dispatch:
-  push:
-    branches:
-      - main
+workflow_dispatch:
+push:
+branches: [main]
 
 permissions:
-  contents: read
+contents: read
 
 jobs:
-  build:
-    name: Compilar aplicación Android
-    runs-on: ubuntu-latest
+build:
+name: Compilar aplicación Android
+runs-on: ubuntu-latest
 
-    env:
-      ANDROID_HOME: /usr/local/lib/android/sdk
+env:
+  ANDROID_HOME: /usr/local/lib/android/sdk
+  ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
-    steps:
-      - name: Descargar proyecto
-        uses: actions/checkout@v4
+steps:
+  - name: Descargar proyecto
+    uses: actions/checkout@v4
 
-      - name: Configurar Java
-        uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: '17'
+  - name: Preparar Java
+    uses: actions/setup-java@v4
+    with:
+      distribution: temurin
+      java-version: '17'
 
-      - name: Configurar Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          cmdline-tools-version: '16.0'
+  - name: Preparar Gradle
+    uses: gradle/actions/setup-gradle@v4
+    with:
+      gradle-version: '8.9'
 
-      - name: Aceptar licencias Android
-        shell: bash
-        run: |
-          mkdir -p "$ANDROID_HOME/licenses"
-          sdkmanager --licenses </dev/null || true
+  - name: Aceptar licencias Android
+    shell: bash
+    run: |
+      yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses || true
 
-      - name: Instalar componentes Android
-        shell: bash
-        run: |
-          sdkmanager --install \
-            "platform-tools" \
-            "platforms;android-35" \
-            "build-tools;35.0.0"
+  - name: Instalar componentes Android
+    shell: bash
+    run: |
+      "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install \
+        "platform-tools" \
+        "platforms;android-35" \
+        "build-tools;35.0.0"
 
-      - name: Configurar Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.9'
+  - name: Compilar APK
+    run: gradle assembleDebug --stacktrace
 
-      - name: Compilar APK
-        run: gradle assembleDebug --stacktrace
-
-      - name: Guardar APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: Kiosco-Erick-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
-          retention-days: 7
+  - name: Guardar APK
+    uses: actions/upload-artifact@v4
+    with:
+      name: Kiosco-Erick-APK
+      path: app/build/outputs/apk/debug/app-debug.apk
+      if-no-files-found: error
+      retention-days: 7
