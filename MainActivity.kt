@@ -1,217 +1,314 @@
 package com.kioscoerick.app
 
 import android.content.Context
-import android.media.AudioManager
-import android.media.ToneGenerator
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.PointOfSale
-import androidx.compose.material.icons.filled.Inventory2
-import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
 import org.json.JSONArray
 import org.json.JSONObject
-import java.text.SimpleDateFormat
-import java.util.Date
 import java.util.Locale
 
-data class Product(val barcode:String, val name:String, val price:Double, val stock:Int)
-data class CartLine(val barcode:String, val name:String, val price:Double, val qty:Int)
+data class Product(
+    val barcode: String,
+    val name: String,
+    val price: Double,
+    val stock: Int
+)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { KioscoApp(this) }
+        setContent {
+            KioscoApp(this)
+        }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun KioscoApp(ctx: Context) {
-    val prefs = remember { ctx.getSharedPreferences("kiosco_erick_data", Context.MODE_PRIVATE) }
-    var products by remember { mutableStateOf(loadProducts(prefs)) }
-    var sales by remember { mutableStateOf(prefs.getInt("sales_count", 0)) }
-    var tab by remember { mutableStateOf(0) }
-    var cart by remember { mutableStateOf(listOf<CartLine>()) }
-    var notice by remember { mutableStateOf("") }
-    var scannedCode by remember { mutableStateOf("") }
-    var name by remember { mutableStateOf("") }
-    var price by remember { mutableStateOf("") }
-    var stock by remember { mutableStateOf("1") }
-    var showRegister by remember { mutableStateOf(false) }
-
-    fun saveAll(updated: List<Product>) {
-        products = updated
-        val arr = JSONArray()
-        updated.forEach { p ->
-            arr.put(JSONObject().put("barcode",p.barcode).put("name",p.name)
-                .put("price",p.price).put("stock",p.stock))
-        }
-        prefs.edit().putString("products", arr.toString()).apply()
-    }
-    fun addScanned(code: String) {
-        val p = products.firstOrNull { it.barcode == code }
-        if (p == null) {
-            scannedCode = code
-            name = ""
-            price = ""
-            stock = "1"
-            showRegister = true
-            notice = "Producto nuevo: completá sus datos y guardalo."
-        } else {
-            cart = if (cart.any { it.barcode == code }) cart.map {
-                if (it.barcode == code) it.copy(qty=it.qty+1) else it
-            } else cart + CartLine(p.barcode,p.name,p.price,1)
-            try { ToneGenerator(AudioManager.STREAM_MUSIC, 90).startTone(ToneGenerator.TONE_PROP_BEEP, 150) } catch (_:Exception) {}
-            notice = "Bip: ${p.name} agregado"
-        }
-    }
-    val scanLauncher = rememberLauncherForActivityResult(ScanContract()) { result ->
-        if (result.contents != null) addScanned(result.contents)
+fun KioscoApp(context: Context) {
+    val prefs = remember {
+        context.getSharedPreferences("kiosco_erick_data", Context.MODE_PRIVATE)
     }
 
-    MaterialTheme(colorScheme = lightColorScheme(primary = androidx.compose.ui.graphics.Color(0xFF16803C))) {
-        Scaffold(topBar = {
-            TopAppBar(title = {
-                Column {
-                    Text("Kiosco Erick", fontWeight = FontWeight.Bold)
-                    Text("Caja móvil · productos, ventas y stock", style = MaterialTheme.typography.labelSmall)
-                }
-            })
-        }) { padding ->
-            Column(Modifier.padding(padding).fillMaxSize().padding(16.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(selected=tab==0,onClick={tab=0},label={Text("Vender")},leadingIcon={Icon(Icons.Default.PointOfSale,null)})
-                    FilterChip(selected=tab==1,onClick={tab=1},label={Text("Productos (${products.size})")},leadingIcon={Icon(Icons.Default.Inventory2,null)})
-                    FilterChip(selected=tab==2,onClick={tab=2},label={Text("Resumen")})
-                }
-                Spacer(Modifier.height(12.dp))
-                when(tab) {
-                    0 -> {
-                        Button(onClick={
-                            val opts=ScanOptions().setPrompt("Apuntá al código de barras del producto")
-                                .setBeepEnabled(true).setOrientationLocked(true).setDesiredBarcodeFormats(ScanOptions.ONE_D_CODE_TYPES)
-                            scanLauncher.launch(opts)
-                        }, modifier=Modifier.fillMaxWidth().height(58.dp)) {
-                            Icon(Icons.Default.QrCodeScanner,null); Spacer(Modifier.width(8.dp)); Text("ESCANEAR PRODUCTO")
-                        }
-                        if (notice.isNotBlank()) Text(notice, modifier=Modifier.padding(vertical=8.dp), color=MaterialTheme.colorScheme.primary)
-                        Text("Carrito", style=MaterialTheme.typography.titleLarge, fontWeight=FontWeight.Bold)
-                        if (cart.isEmpty()) Text("Todavía no hay productos. Escaneá uno para empezar.", modifier=Modifier.padding(vertical=12.dp))
-                        LazyColumn(Modifier.weight(1f, fill=false)) {
-                            items(cart, key={it.barcode}) { line ->
-                                Card(Modifier.fillMaxWidth().padding(vertical=4.dp)) {
-                                    Row(Modifier.padding(12.dp), verticalAlignment=Alignment.CenterVertically) {
-                                        Column(Modifier.weight(1f)) {
-                                            Text(line.name, fontWeight=FontWeight.SemiBold)
-                                            Text("${line.qty} × ${money(line.price)} = ${money(line.qty*line.price)}")
-                                        }
-                                        IconButton(onClick={cart=cart.filterNot{it.barcode==line.barcode}}) {
-                                            Icon(Icons.Default.Delete,"Quitar")
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        val total = cart.sumOf { it.price * it.qty }
-                        Text("TOTAL: ${money(total)}", style=MaterialTheme.typography.headlineSmall, fontWeight=FontWeight.Bold)
-                        Button(enabled=cart.isNotEmpty(), onClick={
-                            val newProducts=products.map { p ->
-                                val sold=cart.firstOrNull{it.barcode==p.barcode}?.qty ?: 0
-                                p.copy(stock=(p.stock-sold).coerceAtLeast(0))
-                            }
-                            saveAll(newProducts)
-                            sales += 1
-                            prefs.edit().putInt("sales_count",sales).putString("last_sale", "${SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("es","AR")).format(Date())} · ${money(total)}").apply()
-                            cart= emptyList()
-                            notice="¡Venta registrada! Total ${money(total)}"
-                        }, modifier=Modifier.fillMaxWidth()) { Text("COBRAR Y REGISTRAR VENTA") }
+    var products by remember {
+        mutableStateOf(loadProducts(prefs))
+    }
+
+    var message by remember {
+        mutableStateOf("Listo para vender")
+    }
+
+    var showDialog by remember {
+        mutableStateOf(false)
+    }
+
+    var scannedCode by remember {
+        mutableStateOf("")
+    }
+
+    var productName by remember {
+        mutableStateOf("")
+    }
+
+    var productPrice by remember {
+        mutableStateOf("")
+    }
+
+    var productStock by remember {
+        mutableStateOf("")
+    }
+
+    fun saveProducts(list: List<Product>) {
+        products = list
+
+        val array = JSONArray()
+
+        list.forEach { product ->
+            array.put(
+                JSONObject()
+                    .put("barcode", product.barcode)
+                    .put("name", product.name)
+                    .put("price", product.price)
+                    .put("stock", product.stock)
+            )
+        }
+
+        prefs.edit()
+            .putString("products", array.toString())
+            .apply()
+    }
+
+    val scannerLauncher =
+        rememberLauncherForActivityResult(
+            contract = ScanContract()
+        ) { result ->
+
+            val code = result.contents ?: return@rememberLauncherForActivityResult
+
+            val existingProduct = products.firstOrNull {
+                it.barcode == code
+            }
+
+            if (existingProduct == null) {
+                scannedCode = code
+                productName = ""
+                productPrice = ""
+                productStock = ""
+                showDialog = true
+            } else {
+                message = "Producto encontrado: ${existingProduct.name}"
+            }
+        }
+
+    MaterialTheme {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Text("Kiosco Erick")
                     }
-                    1 -> {
-                        Button(onClick={
-                            val opts=ScanOptions().setPrompt("Escaneá el código para registrar el producto")
-                                .setBeepEnabled(true).setOrientationLocked(true).setDesiredBarcodeFormats(ScanOptions.ONE_D_CODE_TYPES)
-                            scanLauncher.launch(opts)
-                        }, modifier=Modifier.fillMaxWidth()) { Icon(Icons.Default.Add,null); Text(" ESCANEAR Y REGISTRAR PRODUCTO") }
-                        Text("Los productos quedan guardados en este celular.", style=MaterialTheme.typography.bodySmall, modifier=Modifier.padding(vertical=8.dp))
-                        LazyColumn {
-                            items(products, key={it.barcode}) { p ->
-                                Card(Modifier.fillMaxWidth().padding(vertical=4.dp)) {
-                                    Row(Modifier.padding(12.dp), verticalAlignment=Alignment.CenterVertically) {
-                                        Column(Modifier.weight(1f)) {
-                                            Text(p.name, fontWeight=FontWeight.Bold)
-                                            Text("Código: ${p.barcode}")
-                                            Text("${money(p.price)} · Stock: ${p.stock}")
-                                        }
-                                        IconButton(onClick={saveAll(products.filterNot{it.barcode==p.barcode})}) { Icon(Icons.Default.Delete,"Eliminar") }
-                                    }
-                                }
+                )
+            }
+        ) { paddingValues ->
+
+            Column(
+                modifier = Modifier
+                    .padding(paddingValues)
+                    .padding(16.dp)
+                    .fillMaxSize()
+            ) {
+
+                Button(
+                    onClick = {
+                        val options = ScanOptions()
+                            .setPrompt("Apuntá al código de barras")
+                            .setBeepEnabled(true)
+                            .setOrientationLocked(true)
+
+                        scannerLauncher.launch(options)
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("ESCANEAR PRODUCTO")
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text(message)
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text(
+                    text = "Productos guardados: ${products.size}",
+                    style = MaterialTheme.typography.titleMedium
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                LazyColumn {
+                    items(
+                        items = products,
+                        key = { it.barcode }
+                    ) { product ->
+
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(12.dp)
+                            ) {
+                                Text(product.name)
+                                Text("Código: ${product.barcode}")
+                                Text("Precio: ${money(product.price)}")
+                                Text("Stock: ${product.stock}")
                             }
                         }
-                    }
-                    else -> {
-                        Text("Resumen", style=MaterialTheme.typography.headlineSmall, fontWeight=FontWeight.Bold)
-                        Text("Ventas registradas: $sales", modifier=Modifier.padding(top=12.dp))
-                        Text("Productos cargados: ${products.size}")
-                        Text("Última venta: ${prefs.getString("last_sale","Todavía no hay ventas")}")
-                        Text("Los datos se guardan localmente en este teléfono. Hacé una copia de seguridad si son importantes.", modifier=Modifier.padding(top=16.dp))
                     }
                 }
             }
         }
     }
 
-    if (showRegister) {
-        AlertDialog(onDismissRequest={showRegister=false}, title={Text("Registrar producto")},
-            text={
-                Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
-                    Text("Código detectado: $scannedCode")
-                    OutlinedTextField(value=name,onValueChange={name=it},label={Text("Nombre del producto")},singleLine=true)
-                    OutlinedTextField(value=price,onValueChange={price=it},label={Text("Precio en pesos")},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Decimal),singleLine=true)
-                    OutlinedTextField(value=stock,onValueChange={stock=it},label={Text("Stock inicial")},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Number),singleLine=true)
+    if (showDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showDialog = false
+            },
+            title = {
+                Text("Registrar producto")
+            },
+            text = {
+                Column {
+                    Text("Código: $scannedCode")
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = productName,
+                        onValueChange = {
+                            productName = it
+                        },
+                        label = {
+                            Text("Nombre")
+                        },
+                        singleLine = true
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = productPrice,
+                        onValueChange = {
+                            productPrice = it
+                        },
+                        label = {
+                            Text("Precio")
+                        },
+                        singleLine = true
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = productStock,
+                        onValueChange = {
+                            productStock = it
+                        },
+                        label = {
+                            Text("Stock")
+                        },
+                        singleLine = true
+                    )
                 }
             },
-            confirmButton={ TextButton(onClick={
-                val parsedPrice=price.replace(",",".").toDoubleOrNull()
-                val parsedStock=stock.toIntOrNull()
-                if (name.isNotBlank() && parsedPrice!=null && parsedPrice>=0 && parsedStock!=null && parsedStock>=0) {
-                    val p=Product(scannedCode,name.trim(),parsedPrice,parsedStock)
-                    saveAll(products.filterNot{it.barcode==scannedCode}+p)
-                    cart=cart.filterNot{it.barcode==scannedCode}+CartLine(p.barcode,p.name,p.price,1)
-                    showRegister=false
-                    notice="Producto guardado y agregado a la venta."
-                    try { ToneGenerator(AudioManager.STREAM_MUSIC,90).startTone(ToneGenerator.TONE_PROP_BEEP,150) } catch (_:Exception) {}
-                } else notice="Revisá nombre, precio y stock."
-            }) { Text("Guardar") } },
-            dismissButton={TextButton(onClick={showRegister=false}){Text("Cancelar")}}
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val price = productPrice
+                            .replace(",", ".")
+                            .toDoubleOrNull()
+
+                        val stock = productStock.toIntOrNull()
+
+                        if (
+                            productName.isNotBlank() &&
+                            price != null &&
+                            stock != null
+                        ) {
+                            val newProduct = Product(
+                                barcode = scannedCode,
+                                name = productName.trim(),
+                                price = price,
+                                stock = stock
+                            )
+
+                            saveProducts(
+                                products.filterNot {
+                                    it.barcode == scannedCode
+                                } + newProduct
+                            )
+
+                            message = "Producto guardado correctamente"
+                            showDialog = false
+                        } else {
+                            message = "Completá todos los datos correctamente"
+                        }
+                    }
+                ) {
+                    Text("GUARDAR")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showDialog = false
+                    }
+                ) {
+                    Text("CANCELAR")
+                }
+            }
         )
     }
 }
 
-fun loadProducts(prefs: android.content.SharedPreferences): List<Product> {
+fun loadProducts(
+    prefs: android.content.SharedPreferences
+): List<Product> {
     return try {
-        val arr=JSONArray(prefs.getString("products","[]"))
-        (0 until arr.length()).map { i ->
-            val o=arr.getJSONObject(i)
-            Product(o.getString("barcode"),o.getString("name"),o.getDouble("price"),o.optInt("stock",0))
+        val array = JSONArray(
+            prefs.getString("products", "[]")
+        )
+
+        (0 until array.length()).map { index ->
+            val obj = array.getJSONObject(index)
+
+            Product(
+                barcode = obj.getString("barcode"),
+                name = obj.getString("name"),
+                price = obj.getDouble("price"),
+                stock = obj.optInt("stock", 0)
+            )
         }
-    } catch (_:Exception) { emptyList() }
+    } catch (_: Exception) {
+        emptyList()
+    }
 }
-fun money(value: Double): String = "$ " + String.format(Locale("es","AR"), "%,.2f", value)
+
+fun money(value: Double): String {
+    return "$ " + String.format(
+        Locale("es", "AR"),
+        "%,.2f",
+        value
+    )
+}
